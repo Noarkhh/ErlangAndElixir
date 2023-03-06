@@ -4,15 +4,15 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 28. Feb 2023 15:58
+%%% Created : 06. Mar 2023 02:44
 %%%-------------------------------------------------------------------
 -module(my_first_module).
 -author("noarkhh").
 
 %% API
--export([mojapierwszafunckja/0, f1/1, factorial/1, power/2, duplicateElements/1, contains/2]).
+-export([ojapierwszafunckia/0, contains/2, duplicateElements/1, power/2, factorial/1, f1/1]).
 
-mojapierwszafunckja () -> 28.
+ojapierwszafunckia() -> 28.
 
 f1(Z) -> Z ++ Z.
 
