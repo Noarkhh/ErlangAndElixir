@@ -42,3 +42,5 @@ rpn(["tan" | Tail], [A | T]) -> rpn(Tail, [math:tan(A) | T]);
 rpn(["pow" | Tail], [A, B | T]) -> rpn(Tail, [math:pow(B, A) | T]);
 rpn([Num | Tail], Stack) -> rpn(Tail, [element(1, string:to_float(Num)) | Stack]);
 rpn([], [Res | _T]) -> Res.
+
+
