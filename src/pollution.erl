@@ -14,52 +14,116 @@
   create_test_monitor/0, pipe/2, get_daily_mean/3, mean/1, get_maximum_gradient_stations/1, distance/2,
   calculate_gradient/3]).
 
+-record(monitor, {stations, coordsToNames}).
 -record(station, {name, coordinates, measurements}).
 -record(measurement, {time, type, value}).
 
-create_monitor() -> #{}.
+create_monitor() -> #monitor{stations = #{}, coordsToNames = #{}}.
 
 add_station(Name, Coordinates, Monitor) ->
-  Monitor#{Name => #station{name = Name, coordinates = Coordinates, measurements = #{}}}.
+  if
+    is_map_key(Name, Monitor#monitor.stations) == true -> {error, "Name already taken"};
+    is_map_key(Coordinates, Monitor#monitor.coordsToNames) == true -> {error, "Coordinates already occupied"};
+    true ->
+      EmptyStation = #station{name = Name, coordinates = Coordinates, measurements = #{}},
+      Monitor1 = Monitor#monitor{stations = (Monitor#monitor.stations)#{Name => EmptyStation}},
+      Monitor1#monitor{coordsToNames = (Monitor1#monitor.coordsToNames)#{Coordinates => Name}}
+  end.
 
-add_value(Name, Time, Type, Value, Monitor) ->
-  Station = maps:get(Name, Monitor),
-  NewMeasurement = #measurement{time = Time, type = Type, value = Value},
-  UpdatedMeasurements = (Station#station.measurements)#{{Time, Type} => NewMeasurement},
-  Monitor#{Name := Station#station{measurements = UpdatedMeasurements}}.
-
-remove_value(Name, Time, Type, Monitor) ->
-  Station = maps:get(Name, Monitor),
-  UpdatedMeasurements = maps:remove({Time, Type}, Station#station.measurements),
-  Monitor#{Name := Station#station{measurements = UpdatedMeasurements}}.
-
-get_one_value(Name, Time, Type, Monitor) ->
-  Station = maps:get(Name, Monitor),
-  maps:get({Time, Type}, Station#station.measurements).
-
-
-get_station_mean(Name, Type, Monitor) ->
-  Station = maps:get(Name, Monitor),
-  IsOfGivenType = fun (_, #measurement{type=T}) when T == Type -> true; (_, _) -> false end,
-  FilteredMeasurementsList = maps:values(maps:filter(IsOfGivenType, Station#station.measurements)),
-  ValuesList = lists:map(fun (#measurement{value=Value}) -> Value end, FilteredMeasurementsList),
-  mean(ValuesList).
+add_value(Name, Time, Type, Value, Monitor) when is_list(Name) ->
+  Station = case is_map_key(Name, Monitor#monitor.stations) of
+              true -> maps:get(Name, Monitor#monitor.stations);
+              false -> error
+            end,
+  if
+    Station == error -> {error, "Station doesn't exist"};
+    is_map_key({Time, Type}, Station#station.measurements) == true -> {error, "Measurements already taken"};
+    true ->
+      NewMeasurement = #measurement{time = Time, type = Type, value = Value},
+      UpdatedMeasurements = (Station#station.measurements)#{{Time, Type} => NewMeasurement},
+      Monitor#monitor{stations = (Monitor#monitor.stations)#{Name := Station#station{measurements = UpdatedMeasurements}}}
+  end;
+add_value(Coords, Time, Type, Value, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> add_value(maps:get(Coords, Monitor#monitor.coordsToNames), Time, Type, Value, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end.
 
 
-get_daily_mean(Date, Type, Monitor) ->
+remove_value(Name, Time, Type, Monitor) when is_list(Name) ->
+  Station = case is_map_key(Name, Monitor#monitor.stations) of
+              true -> maps:get(Name, Monitor#monitor.stations);
+              false -> error
+            end,
+  if
+    Station == error -> {error, "Station doesn't exist"};
+    is_map_key({Time, Type}, Station#station.measurements) == false -> {error, "No measurements"};
+    true ->
+      UpdatedMeasurements = maps:remove({Time, Type}, Station#station.measurements),
+      Monitor#monitor{stations = (Monitor#monitor.stations)#{Name := Station#station{measurements = UpdatedMeasurements}}}
+  end;
+remove_value(Coords, Time, Type, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> remove_value(maps:get(Coords, Monitor#monitor.coordsToNames), Time, Type, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end.
+
+get_one_value(Name, Time, Type, Monitor) when is_list(Name) ->
+  Station = case is_map_key(Name, Monitor#monitor.stations) of
+              true -> maps:get(Name, Monitor#monitor.stations);
+              false -> error
+            end,
+  if
+    Station == error -> {error, "Station doesn't exist"};
+    is_map_key({Time, Type}, Station#station.measurements) == false -> {error, "Measurement doesn't exist"};
+    true -> (maps:get({Time, Type}, Station#station.measurements))#measurement.value
+  end;
+get_one_value(Coords, Time, Type, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> get_one_value(maps:get(Coords, Monitor#monitor.coordsToNames), Time, Type, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end.
+
+get_station_mean(Name, Type, Monitor) when is_list(Name) ->
+  Station = case is_map_key(Name, Monitor#monitor.stations) of
+              true -> maps:get(Name, Monitor#monitor.stations);
+              false -> error
+            end,
+  if
+    Station == error -> {error, "Station doesn't exist"};
+    true ->
+      IsOfGivenType = fun (_, #measurement{type=T}) when T == Type -> true; (_, _) -> false end,
+      FilteredMeasurementsList = maps:values(maps:filter(IsOfGivenType, Station#station.measurements)),
+      ValuesList = lists:map(fun (#measurement{value=Value}) -> Value end, FilteredMeasurementsList),
+      case mean(ValuesList) of
+        nan -> {error, "No measurements of given type"};
+        Mean -> Mean
+      end
+  end;
+get_station_mean(Coords, Type, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> get_station_mean(maps:get(Coords, Monitor#monitor.coordsToNames), Type, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end.
+
+get_daily_mean(Type, Date, Monitor) ->
   GetStationMeasurement =
-    fun (_, #measurement{time={D, _}, type=T, value=V}) when (D == Date) and (T == Type) -> {true, V};
-      (_, _) -> false end,
+    fun (#measurement{time={D, _}, type=T, value=V}) when (D == Date) and (T == Type) -> {true, V};
+      (_) -> false end,
 
   GetMonitorMeasurements =
-    fun (_K, Station) -> lists:filtermap(GetStationMeasurement, maps:values(Station#station.measurements)) end,
+    fun (Station) -> lists:filtermap(GetStationMeasurement, maps:values(Station#station.measurements)) end,
 
-  pipe(Monitor, [
-    {maps, map, [GetMonitorMeasurements]},
+  case
+    pipe(Monitor#monitor.stations, [
     {maps, values, []},
+    {lists, map, [GetMonitorMeasurements]},
     {lists, append, []},
     {?MODULE, mean, []}
-  ]).
+  ]) of
+    nan -> {error, "No measurements of given type and date"};
+    Mean -> Mean
+  end.
 
 %% Dodaj do modułu pollution funkcję get_maximum_gradient_stations, która wyszuka parę stacji, na których wystąpił
 %% największy gradient zanieczyszczeń w kontekście odległości.
@@ -97,8 +161,7 @@ calculate_gradient(Station1, Station2, Date) ->
 
 get_maximum_gradient_stations(Monitor) ->
   StationPairs = [{St1, St2} || St1 <- maps:values(Monitor), St2 <- maps:values(Monitor), St1#station.name > St2#station.name],
-  MaxGradientStations = fun({St11, St12, V1}, {_, _, V2}) when V1 > V2 -> {St11, St12, V1}; (_, {St21, St22, V2}) -> {St21, St22, V2} end,
-  lists:foldl(MaxGradientStations, {0, 0, -1}, lists:map(fun ({St1, St2}) -> {St1, St2, calculate_gradient(St1, St2, erlang:date())} end, StationPairs)).
+  lists:max(lists:map(fun ({St1, St2}) -> {calculate_gradient(St1, St2, erlang:date()), St1, St2} end, StationPairs)).
 
 mean([]) -> nan;
 mean(List) -> lists:sum(List) / length(List).
