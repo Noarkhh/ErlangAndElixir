@@ -11,8 +11,7 @@
 
 %% API
 -export([create_monitor/0, add_station/3, add_value/5, remove_value/4, get_one_value/4, get_station_mean/3,
-  create_test_monitor/0, pipe/2, get_daily_mean/3, mean/1, get_maximum_gradient_stations/1, distance/2,
-  calculate_gradient/3]).
+  create_test_monitor/0, get_daily_mean/3, get_maximum_gradient_stations/1]).
 
 -record(monitor, {stations, coordsToNames}).
 -record(station, {name, coordinates, measurements}).
@@ -128,6 +127,7 @@ get_daily_mean(Type, Date, Monitor) ->
 %% Dodaj do modułu pollution funkcję get_maximum_gradient_stations, która wyszuka parę stacji, na których wystąpił
 %% największy gradient zanieczyszczeń w kontekście odległości.
 
+distance({Lat1, Lon1}, {Lat2, Lon2}) -> abs(Lat1 - Lat2) + abs(Lon1 - Lon2);
 distance({Lat1, Lon1}, {Lat2, Lon2}) ->
   R = 6371000,
   Phi1 = Lat1 * math:pi() / 180,
@@ -140,28 +140,36 @@ distance({Lat1, Lon1}, {Lat2, Lon2}) ->
   R * C.
 
 group_measurements(L) ->
-  ParamMap = #{"PM2.5" => [], "PM10" => [], "O3" => [], "NO2" => [], "SO2" => [], "CO" => []},
-  Folded = lists:foldl(fun (#measurement{type=T, value=V}, Map) -> Map#{T => [V | maps:get(T, Map)]} end, ParamMap, L),
+  SafeMapGet = fun (K, Map) -> case is_map_key(K, Map) of true -> maps:get(K, Map); false -> [] end end,
+  Folded = lists:foldl(fun (#measurement{type=T, value=V}, Map) -> Map#{T => [V | SafeMapGet(T, Map)]} end, #{}, L),
   maps:map(fun (_K, V) -> mean(V) end, Folded).
 
+zip_maps_with(Fun, Map1, Map2) -> zip_maps_with_(Fun, maps:to_list(Map1), Map2, #{}).
+zip_maps_with_(_Fun, [], _Map, Zipped) -> Zipped;
+zip_maps_with_(Fun, [{K, V} | T], Map, Zipped) ->
+  case is_map_key(K, Map) of
+    true -> zip_maps_with_(Fun, T, Map, Zipped#{K => Fun(V, maps:get(K, Map))});
+    false -> zip_maps_with_(Fun, T, Map, Zipped)
+  end.
+
 calculate_gradient(Station1, Station2, Date) ->
-  CheckForToday = fun (#measurement{time = {D, _}}) when D == Date -> true; (_) -> false end,
+  CheckForToday = fun (#measurement{time = {D, _}}) -> D == Date end,
   Measurements1 = group_measurements(lists:filter(CheckForToday, maps:values(Station1#station.measurements))),
   Measurements2 = group_measurements(lists:filter(CheckForToday, maps:values(Station2#station.measurements))),
 
-  CalculateDiff = fun (nan, _) -> 0; (_, nan) -> 0; (V1, V2) -> abs(V1 - V2) end,
-
-  Diffs = lists:zipwith(CalculateDiff, maps:values(Measurements1), maps:values(Measurements2)),
+  Diffs = zip_maps_with(fun (X, Y) -> X - Y end, Measurements1, Measurements2),
 
   pipe(Diffs, [
+    {maps, values, []},
     {lists, map, [fun (X) -> X*X end]},
     {lists, sum, []},
     {math, sqrt, []}
   ]) / distance(Station1#station.coordinates, Station2#station.coordinates).
 
 get_maximum_gradient_stations(Monitor) ->
-  StationPairs = [{St1, St2} || St1 <- maps:values(Monitor), St2 <- maps:values(Monitor), St1#station.name > St2#station.name],
-  lists:max(lists:map(fun ({St1, St2}) -> {calculate_gradient(St1, St2, erlang:date()), St1, St2} end, StationPairs)).
+  Stations = maps:values(Monitor#monitor.stations),
+  StationPairs = [{St1, St2} || St1 <- Stations, St2 <- Stations, St1#station.name > St2#station.name],
+  lists:max(lists:map(fun ({St1, St2}) -> {calculate_gradient(St1, St2, {2023,3,27}), St1, St2} end, StationPairs)).
 
 mean([]) -> nan;
 mean(List) -> lists:sum(List) / length(List).
