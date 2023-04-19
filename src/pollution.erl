@@ -11,7 +11,7 @@
 
 %% API
 -export([create_monitor/0, add_station/3, add_value/5, remove_value/4, get_one_value/4, get_station_mean/3,
-  create_test_monitor/0, get_daily_mean/3, get_maximum_gradient_stations/1]).
+  create_test_monitor/0, get_daily_mean/3, get_maximum_gradient_stations/1, mean/1]).
 
 -record(monitor, {stations, coordsToNames}).
 -record(station, {name, coordinates, measurements}).
@@ -127,7 +127,7 @@ get_daily_mean(Type, Date, Monitor) ->
 %% Dodaj do modułu pollution funkcję get_maximum_gradient_stations, która wyszuka parę stacji, na których wystąpił
 %% największy gradient zanieczyszczeń w kontekście odległości.
 
-distance({Lat1, Lon1}, {Lat2, Lon2}) -> abs(Lat1 - Lat2) + abs(Lon1 - Lon2);
+%%distance({Lat1, Lon1}, {Lat2, Lon2}) -> abs(Lat1 - Lat2) + abs(Lon1 - Lon2);
 distance({Lat1, Lon1}, {Lat2, Lon2}) ->
   R = 6371000,
   Phi1 = Lat1 * math:pi() / 180,
