@@ -29,7 +29,13 @@ add_station(Name, Coordinates, Monitor) ->
       Monitor1#monitor{coordsToNames = (Monitor1#monitor.coordsToNames)#{Coordinates => Name}}
   end.
 
-add_value(Name, Time, Type, Value, Monitor) when is_list(Name) ->
+
+add_value(Coords, Time, Type, Value, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> add_value(maps:get(Coords, Monitor#monitor.coordsToNames), Time, Type, Value, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end;
+add_value(Name, Time, Type, Value, Monitor) ->
   Station = case is_map_key(Name, Monitor#monitor.stations) of
               true -> maps:get(Name, Monitor#monitor.stations);
               false -> error
@@ -41,13 +47,7 @@ add_value(Name, Time, Type, Value, Monitor) when is_list(Name) ->
       NewMeasurement = #measurement{time = Time, type = Type, value = Value},
       UpdatedMeasurements = (Station#station.measurements)#{{Time, Type} => NewMeasurement},
       Monitor#monitor{stations = (Monitor#monitor.stations)#{Name := Station#station{measurements = UpdatedMeasurements}}}
-  end;
-add_value(Coords, Time, Type, Value, Monitor) when is_tuple(Coords) ->
-  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
-    true -> add_value(maps:get(Coords, Monitor#monitor.coordsToNames), Time, Type, Value, Monitor);
-    false -> {error, "Station doesn't exist"}
   end.
-
 
 remove_value(Name, Time, Type, Monitor) when is_list(Name) ->
   Station = case is_map_key(Name, Monitor#monitor.stations) of

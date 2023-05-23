@@ -1,0 +1,67 @@
+# Untitled notebook
+
+## Section
+
+```elixir
+defmodule Parser do
+  def parse_datetime(date_str, time_str) do
+    date =
+      date_str
+      |> String.split("-")
+      |> Enum.map(&(Integer.parse(&1) |> elem(0)))
+      |> :erlang.list_to_tuple()
+
+    time =
+      (time_str <> ":00")
+      |> String.split(":")
+      |> Enum.map(&(Integer.parse(&1) |> elem(0)))
+      |> :erlang.list_to_tuple()
+
+    {date, time}
+  end
+
+  def parse_location(latitude_str, longitude_str) do
+    {Float.parse(latitude_str) |> elem(0), Float.parse(longitude_str) |> elem(0)}
+  end
+
+  def parse_measurement(str) do
+    [date, time, latitude, longitude, value] = String.split(str, ",")
+
+    %{
+      :datetime => parse_datetime(date, time),
+      :location => parse_location(latitude, longitude),
+      :pollution_level => Integer.parse(value) |> elem(0)
+    }
+  end
+
+  def identify_stations(measurements) do
+    Enum.uniq_by(measurements, &Map.get(&1, :location))
+  end
+end
+```
+
+```elixir
+Code.append_path("/home/noarkhh/UniversitySemester4/ErlangAndElixir/src/")
+:pollution_supervisor.start_link(:normal)
+
+measurements =
+  File.read!("/home/noarkhh/UniversitySemester4/ErlangAndElixir/pollution.csv")
+  |> String.split("\r\n")
+  |> Enum.map(&Parser.parse_measurement(&1))
+
+stations =
+  measurements
+  |> Parser.identify_stations()
+  |> Enum.map(&Map.get(&1, :location))
+
+for {latitude, longitude} <- stations do
+  :pollution_gen_server.add_station("station_#{latitude}_#{longitude}", {latitude, longitude})
+end
+
+for %{:datetime => datetime, :location => location, :pollution_level => value} <-
+      Enum.slice(measurements, 0, 1000) do
+  :pollution_gen_server.add_value(location, datetime, "PM10", value)
+end
+
+# :pollution_gen_server.get_monitor() 
+```
