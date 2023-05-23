@@ -23,13 +23,22 @@ init(Mode) ->
     intensity => 3,
     period => 5
   },
-  ChildSpecList = [#{
-    id => pollution_gen_server,
-    start => {pollution_gen_server, start_link, [Mode]},
-    restart => permanent,
-    shutdown => infinity,
-    type => worker,
-    modules => [pollution_gen_server]
-  }],
-  superv
+  ChildSpecList = [
+    #{
+      id => pollution_gen_server,
+      start => {pollution_gen_server, start_link, [Mode]},
+      restart => permanent,
+      shutdown => infinity,
+      type => worker,
+      modules => [pollution_gen_server]
+    },
+    #{
+      id => pollution_value_collector_gen_statem,
+      start => {pollution_value_collector_gen_statem, start_link, []},
+      restart => permanent,
+      shutdown => infinity,
+      type => worker,
+      modules => [pollution_value_collector_gen_statem]
+    }
+  ],
   {ok, {SupFlags, ChildSpecList}}.
