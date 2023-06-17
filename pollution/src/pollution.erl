@@ -13,18 +13,18 @@
 -export([create_monitor/0, add_station/3, add_value/5, remove_value/4, get_one_value/4, get_station_mean/3,
   create_test_monitor/0, get_daily_mean/3, get_maximum_gradient_stations/1, mean/1]).
 
--record(monitor, {stations, coordsToNames}).
--record(station, {name, coordinates, measurements}).
+-record(monitor, {stations = #{}, coordsToNames = #{}}).
+-record(station, {name, coordinates, measurements = #{}}).
 -record(measurement, {time, type, value}).
 
-create_monitor() -> #monitor{stations = #{}, coordsToNames = #{}}.
+create_monitor() -> #monitor{}.
 
 add_station(Name, Coordinates, Monitor) ->
-  if
+  if    
     is_map_key(Name, Monitor#monitor.stations) == true -> {error, "Name already taken"};
     is_map_key(Coordinates, Monitor#monitor.coordsToNames) == true -> {error, "Coordinates already occupied"};
     true ->
-      EmptyStation = #station{name = Name, coordinates = Coordinates, measurements = #{}},
+      EmptyStation = #station{name = Name, coordinates = Coordinates},
       Monitor1 = Monitor#monitor{stations = (Monitor#monitor.stations)#{Name => EmptyStation}},
       Monitor1#monitor{coordsToNames = (Monitor1#monitor.coordsToNames)#{Coordinates => Name}}
   end.
@@ -83,7 +83,12 @@ get_one_value(Coords, Time, Type, Monitor) when is_tuple(Coords) ->
     false -> {error, "Station doesn't exist"}
   end.
 
-get_station_mean(Name, Type, Monitor) when is_list(Name) ->
+get_station_mean(Coords, Type, Monitor) when is_tuple(Coords) ->
+  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
+    true -> get_station_mean(maps:get(Coords, Monitor#monitor.coordsToNames), Type, Monitor);
+    false -> {error, "Station doesn't exist"}
+  end;
+get_station_mean(Name, Type, Monitor) ->
   Station = case is_map_key(Name, Monitor#monitor.stations) of
               true -> maps:get(Name, Monitor#monitor.stations);
               false -> error
@@ -98,11 +103,6 @@ get_station_mean(Name, Type, Monitor) when is_list(Name) ->
         nan -> {error, "No measurements of given type"};
         Mean -> Mean
       end
-  end;
-get_station_mean(Coords, Type, Monitor) when is_tuple(Coords) ->
-  case is_map_key(Coords, Monitor#monitor.coordsToNames) of
-    true -> get_station_mean(maps:get(Coords, Monitor#monitor.coordsToNames), Type, Monitor);
-    false -> {error, "Station doesn't exist"}
   end.
 
 get_daily_mean(Type, Date, Monitor) ->

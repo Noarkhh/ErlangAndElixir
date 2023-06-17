@@ -19,22 +19,28 @@ start_link(Mode) -> gen_server:start_link({local, ?MODULE}, ?MODULE, Mode, []).
 
 stop() -> gen_server:call(?MODULE, stop).
 
-crash() -> call_function(add_value, []).
+crash() -> call_function(add_value, [], true).
 
-add_station(Name, Coordinates) -> call_function(add_station, [Name, Coordinates]).
-add_value(Name, Time, Type, Value) -> call_function(add_value, [Name, Time, Type, Value]).
-remove_value(Name, Time, Type) -> call_function(remove_value, [Name, Time, Type]).
-get_one_value(Name, Time, Type) -> call_function(get_one_value, [Name, Time, Type]).
-get_station_mean(Name, Type) -> call_function(get_station_mean, [Name, Type]).
-get_daily_mean(Type, Date) -> call_function(get_daily_mean, [Type, Date]).
-get_maximum_gradient_stations() -> call_function(get_maximum_gradient_stations, []).
+add_station(Name, Coordinates) -> call_function(add_station, [Name, Coordinates], true).
+add_value(Name, Time, Type, Value) -> call_function(add_value, [Name, Time, Type, Value], true).
+remove_value(Name, Time, Type) -> call_function(remove_value, [Name, Time, Type], true).
+get_one_value(Name, Time, Type) -> call_function(get_one_value, [Name, Time, Type], false).
+get_station_mean(Name, Type) -> call_function(get_station_mean, [Name, Type], false).
+get_daily_mean(Type, Date) -> call_function(get_daily_mean, [Type, Date], false).
+get_maximum_gradient_stations() -> call_function(get_maximum_gradient_stations, [], false).
 
 get_monitor() -> gen_server:call(?MODULE, get_monitor).
+
+%% Callbacks
 
 init(normal) -> {ok, pollution:create_monitor()};
 init(test) -> {ok, pollution:create_test_monitor()}.
 
-handle_call({Fun, Args}, _From, Monitor) ->
+handle_call({Fun, Args, false}, _From, Monitor) ->
+  Result = apply(pollution, Fun, Args ++ [Monitor]),
+  {reply, Result, Monitor};
+
+handle_call({Fun, Args, true}, _From, Monitor) ->
   NewMonitor = apply(pollution, Fun, Args ++ [Monitor]),
   case NewMonitor of
     {error, _} -> {reply, NewMonitor, Monitor};
@@ -45,5 +51,5 @@ handle_call(get_monitor, _From, Monitor) -> {reply, Monitor, Monitor}.
 handle_cast({Fun, Args}, Monitor) -> {noreply, apply(pollution, Fun, Args ++ [Monitor])};
 handle_cast(stop, Monitor) -> {stop, stop, Monitor}.
 
-call_function(Fun, Args) -> gen_server:call(?MODULE, {Fun, Args}).
+call_function(Fun, Args, UpdatesMonitor) -> gen_server:call(?MODULE, {Fun, Args, UpdatesMonitor}).
 

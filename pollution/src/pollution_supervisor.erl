@@ -14,8 +14,8 @@
 -export([init/1, start_link/1]).
 
 start_link(Mode) when (Mode == test) or (Mode == normal) ->
-  supervisor:start_link({local, ?MODULE}, ?MODULE, Mode),
-  unlink(whereis(?MODULE)).
+  supervisor:start_link({local, ?MODULE}, ?MODULE, Mode).
+%%  unlink(whereis(?MODULE)).
 
 init(Mode) ->
   SupFlags = #{

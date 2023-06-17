@@ -1,0 +1,190 @@
+# Pollution Parsing
+
+## Section
+
+```elixir
+defmodule Parser do
+  def parse_datetime(date_str, time_str) do
+    date =
+      date_str
+      |> String.split("-")
+      |> Enum.map(&(Integer.parse(&1) |> elem(0)))
+      |> :erlang.list_to_tuple()
+
+    time =
+      (time_str <> ":00")
+      |> String.split(":")
+      |> Enum.map(&(Integer.parse(&1) |> elem(0)))
+      |> :erlang.list_to_tuple()
+
+    {date, time}
+  end
+
+  def parse_location(latitude_str, longitude_str) do
+    {Float.parse(latitude_str) |> elem(0), Float.parse(longitude_str) |> elem(0)}
+  end
+
+  def parse_measurement(str) do
+    [date, time, latitude, longitude, value] = String.split(str, ",")
+
+    %{
+      :datetime => parse_datetime(date, time),
+      :location => parse_location(latitude, longitude),
+      :pollution_level => Integer.parse(value) |> elem(0)
+    }
+  end
+
+  def identify_stations(measurements) do
+    Enum.uniq_by(measurements, &Map.get(&1, :location))
+  end
+end
+```
+
+```elixir
+defmodule DataProcessor do
+  def read_measurements(csv_path) do
+    File.read!(csv_path)
+    |> String.split("\r\n")
+    |> Enum.map(&Parser.parse_measurement(&1))
+  end
+
+  def get_unique_station_locations(measurements) do
+    measurements
+    |> Parser.identify_stations()
+    |> Enum.map(&Map.get(&1, :location))
+  end
+
+  def add_stations_to_monitor(station_locations) do
+    for {latitude, longitude} <- station_locations do
+      :pollution_gen_server.add_station("station_#{latitude}_#{longitude}", {latitude, longitude})
+    end
+  end
+
+  def add_measurements_to_monitor(measurements) do
+    for %{:datetime => datetime, :location => location, :pollution_level => value} <-
+          measurements do
+      :pollution_gen_server.add_value(location, datetime, "PM10", value)
+    end
+  end
+
+  def load_and_add_stations() do
+    "/home/noarkhh/UniversitySemester4/ErlangAndElixir/pollution.csv"
+    |> DataProcessor.read_measurements()
+    |> DataProcessor.get_unique_station_locations()
+    |> DataProcessor.add_stations_to_monitor()
+  end
+
+  def load_and_add_measurements(measurements, first, last) do
+    measurements
+    |> Enum.slice(first, last)
+    |> DataProcessor.add_measurements_to_monitor()
+  end
+end
+```
+
+```elixir
+Code.append_path(
+  "/home/noarkhh/UniversitySemester4/ErlangAndElixir/pollution/_build/default/lib/pollution/ebin/"
+)
+
+Application.start(:pollution)
+```
+
+```elixir
+measurements =
+  DataProcessor.read_measurements(
+    "/home/noarkhh/UniversitySemester4/ErlangAndElixir/pollution.csv"
+  )
+```
+
+```elixir
+station_locations = DataProcessor.get_unique_station_locations(measurements)
+```
+
+```elixir
+Application.stop(:pollution)
+Application.start(:pollution)
+
+(&DataProcessor.load_and_add_stations/0)
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+:pollution_gen_server.get_monitor()
+|> elem(1)
+|> Map.get("station_20.06_49.986")
+
+# |> (&Map.get(:pollution_gen_server.get_monitor(), &1)).()
+```
+
+```elixir
+:pollution_gen_server.get_monitor()
+```
+
+```elixir
+:pollution_gen_server.get_station_mean({20.06, 49.986}, "PM10")
+```
+
+```elixir
+fn -> DataProcessor.load_and_add_measurements(measurements, 0, 2000) end
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+fn -> DataProcessor.load_and_add_measurements(measurements, 2000, 3000) end
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+fn -> DataProcessor.load_and_add_measurements(measurements, 3000, 4000) end
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+fn -> DataProcessor.load_and_add_measurements(measurements, 4000, 5000) end
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+fn -> DataProcessor.load_and_add_measurements(measurements, 5000, 5905) end
+|> :timer.tc()
+|> elem(0)
+```
+
+```elixir
+fn -> :pollution_gen_server.get_station_mean({20.06, 49.986}, "PM10") end
+|> :timer.tc()
+```
+
+```elixir
+:pollution_gen_server.get_monitor()
+|> elem(1)
+|> Enum.map(&map_size(elem(elem(&1, 1), 3)))
+|> Enum.sum()
+```
+
+```elixir
+fn -> :pollution_gen_server.get_daily_mean("PM10", {3, 5, 2017}) end
+|> :timer.tc()
+```
+
+```elixir
+length(measurements)
+```
+
+```elixir
+Application.stop(:pollution)
+3_658_131
+5_318_478
+3_745_165
+29963
+```
+
+```elixir
+
+```
